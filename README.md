@@ -5,6 +5,14 @@
 
 零第三方依赖：噪声、marching squares、曲线平滑、山体阴影、PNG 编解码全部自写（仅用 Node 标准库）。
 
+![1440×1000](preview/terrain-1440x1000.png)
+
+<sub>1440×1000 · 5 级色带 + 单向光照 + 水面 + 9 条等高线 · 全部由 `seed` 决定</sub>
+
+| 2560×1440 | 390×844 | 换 seed（`ridge-07`） |
+|---|---|---|
+| ![2560×1440](preview/terrain-2560x1440.png) | ![390×844](preview/terrain-390x844.png) | ![ridge-07](preview/terrain-1440x1000-seed-ridge-07.png) |
+
 > 命名说明：`dsh-isopleth` 取自制图学术语 *isopleth*（等值线）。本项目**不含任何游戏商标**，
 > 模块名、类名、包名、SVG 属性里都不会出现「终末地 / Endfield / 明日方舟」。
 > 灵感来自工业风测绘界面与分层设色地形图的通用做法，未使用任何游戏素材。
