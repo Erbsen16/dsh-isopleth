@@ -1,17 +1,21 @@
 // SVG assembly.
 //
-// 只输出交给它的图层：没有滤镜、没有渐变、没有发光，也没有规格之外的任何装饰。
+// 只输出交给它的图层，不额外发明元素。
 // 图层顺序即绘制顺序：调用方先给色带（低层级在下），再给等高线（画在填充之上）。
+//
+// 支持三类图层：
+//   {kind:'path'}   结构化路径（fill / stroke）
+//   {kind:'image'}  内嵌位图（光照层）
+//   {raw:'<g>…</g>'}任意标记（分层方案的叠加层、标注点、蒙版引用等）
+// 另可传 defs（渐变 / 图案 / 滤镜 / 蒙版定义）。
 
 import { TOKENS, STROKE } from './tokens.mjs';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
 /**
- * @param {{width:number,height:number,background?:string,
- *          layers:Array<{d:string, fill?:string, fillOpacity?:number, fillRule?:string,
- *                        stroke?:string, strokeWidth?:number, strokeOpacity?:number}>,
- *          meta?:object}} spec
+ * @param {{width:number,height:number,background?:string,defs?:string,
+ *          layers:Array<object>, meta?:object}} spec
  */
 export function buildSvg(spec) {
   const { width, height, layers } = spec;
@@ -22,8 +26,9 @@ export function buildSvg(spec) {
     .join('');
 
   const body = layers
-    .filter((l) => l.d || l.href)
+    .filter((l) => l && (l.d || l.href || l.raw !== undefined))
     .map((l) => {
+      if (l.raw !== undefined) return `    ${l.raw}`;
       if (l.kind === 'image') {
         return `    <image x="${l.x}" y="${l.y}" width="${l.width}" height="${l.height}" preserveAspectRatio="none" href="${l.href}"/>`;
       }
@@ -34,13 +39,18 @@ export function buildSvg(spec) {
       if (l.stroke) {
         attrs.push(`stroke="${l.stroke}"`, `stroke-width="${l.strokeWidth}"`, `stroke-opacity="${l.strokeOpacity}"`);
       }
+      if (l.mask) attrs.push(`mask="url(#${l.mask})"`);
+      if (l.style) attrs.push(`style="${l.style}"`);
       return `    <path d="${l.d}" ${attrs.join(' ')}/>`;
     })
     .join('\n');
 
+  // defs 为空时不留多余空白，保证既有产物逐字节不变
+  const extraDefs = spec.defs ? `\n${spec.defs}` : '';
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision"${metaAttrs}>
   <defs>
-    <clipPath id="viewport"><rect x="0" y="0" width="${width}" height="${height}"/></clipPath>
+    <clipPath id="viewport"><rect x="0" y="0" width="${width}" height="${height}"/></clipPath>${extraDefs}
   </defs>
   <rect id="ground" x="0" y="0" width="${width}" height="${height}" fill="${background}"/>
   <g clip-path="url(#viewport)" fill="none" stroke-linecap="round" stroke-linejoin="round">

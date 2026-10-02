@@ -164,6 +164,39 @@ function applyFilters(paths, { minPolylineLength, minRingExtent }) {
 }
 
 /**
+ * 单元内的连线决策（鞍点用中心值消歧）。返回 null 表示该单元没有穿越。
+ * 抽出来是为了让「单层扫描」和「一次扫描出多层」共用同一张判定表，不会走样。
+ */
+function cellPairs(code, v0, v1, v2, v3, level) {
+  if (code === 0 || code === 15) return null;
+  if (code === 5 || code === 10) {
+    const centreInside = (v0 + v1 + v2 + v3) * 0.25 > level;
+    if (code === 5) return centreInside ? [['T', 'R'], ['L', 'B']] : [['L', 'T'], ['R', 'B']];
+    return centreInside ? [['L', 'T'], ['R', 'B']] : [['T', 'R'], ['L', 'B']];
+  }
+  return SEGMENT_TABLE[code];
+}
+
+function cellCode(v0, v1, v2, v3, level) {
+  let code = 0;
+  if (v0 > level) code |= 1;
+  if (v1 > level) code |= 2;
+  if (v2 > level) code |= 4;
+  if (v3 > level) code |= 8;
+  return code;
+}
+
+/** 一根水平/垂直边上的交点（同一 id 只算一次）。 */
+function makeEdgePoint(graph, level, toViewX, toViewY, x0, y0, step) {
+  return (id, i0, j0, v0, i1, j1, v1) => {
+    if (graph.x(id) !== undefined) return id;
+    const dv = v1 - v0;
+    const t = dv === 0 ? 0.5 : (level - v0) / dv;
+    return graph.point(id, toViewX(x0 + (i0 + (i1 - i0) * t) * step), toViewY(y0 + (j0 + (j1 - j0) * t) * step));
+  };
+}
+
+/**
  * Contour lines at one level.
  * @returns {{paths:Array, allPaths:Array, stats:object}}
  */
@@ -180,12 +213,7 @@ export function extractIsolines(field, level, opts = {}) {
   const toViewY = (wy) => wy - vy0;
 
   const graph = makeGraph();
-  const edgePoint = (id, i0, j0, v0, i1, j1, v1) => {
-    if (graph.x(id) !== undefined) return id;
-    const dv = v1 - v0;
-    const t = dv === 0 ? 0.5 : (level - v0) / dv;
-    return graph.point(id, toViewX(x0 + (i0 + (i1 - i0) * t) * step), toViewY(y0 + (j0 + (j1 - j0) * t) * step));
-  };
+  const edgePoint = makeEdgePoint(graph, level, toViewX, toViewY, x0, y0, step);
 
   for (let j = 0; j < rows - 1; j++) {
     const r0 = j * cols;
@@ -196,12 +224,9 @@ export function extractIsolines(field, level, opts = {}) {
       const v2 = data[r1 + i + 1];
       const v3 = data[r1 + i];
 
-      let code = 0;
-      if (v0 > level) code |= 1;
-      if (v1 > level) code |= 2;
-      if (v2 > level) code |= 4;
-      if (v3 > level) code |= 8;
-      if (code === 0 || code === 15) continue;
+      const code = cellCode(v0, v1, v2, v3, level);
+      const pairs = cellPairs(code, v0, v1, v2, v3, level);
+      if (!pairs) continue;
 
       const hTop = (j * cols + i) * 2 + H_EDGE;
       const hBot = ((j + 1) * cols + i) * 2 + H_EDGE;
@@ -215,27 +240,6 @@ export function extractIsolines(field, level, opts = {}) {
         L: () => edgePoint(vLeft, i, j, v0, i, j + 1, v3),
       };
 
-      if (code === 5 || code === 10) {
-        const centreInside = (v0 + v1 + v2 + v3) * 0.25 > level;
-        if (code === 5) {
-          if (centreInside) {
-            graph.link(E.T(), E.R());
-            graph.link(E.L(), E.B());
-          } else {
-            graph.link(E.L(), E.T());
-            graph.link(E.R(), E.B());
-          }
-        } else if (centreInside) {
-          graph.link(E.L(), E.T());
-          graph.link(E.R(), E.B());
-        } else {
-          graph.link(E.T(), E.R());
-          graph.link(E.L(), E.B());
-        }
-        continue;
-      }
-
-      const pairs = SEGMENT_TABLE[code];
       for (let k = 0; k < pairs.length; k++) graph.link(E[pairs[k][0]](), E[pairs[k][1]]());
     }
   }
@@ -245,6 +249,94 @@ export function extractIsolines(field, level, opts = {}) {
   stats.level = level;
   stats.segments = graph.segmentCount();
   return { paths: allPaths.filter((p) => !p.drop), allPaths, stats };
+}
+
+/**
+ * 一次扫描出全部层级的等高线。
+ *
+ * 朴素做法是每层各扫一遍全部网格，成本 O(单元数 × 层数)；层数一多（本方案要 30+ 层）就线性变慢。
+ * 这里改成扫一遍网格，对每个单元只处理**落在该单元取值区间内**的层级：
+ * 成本降到 O(单元数 × 每单元平均穿越层数)，而后者通常只有 1~2。
+ *
+ * 输出与逐层调用 extractIsolines **逐字节一致**：同一层级拿到的线段顺序不变，
+ * 因此建图和串链的结果完全一样。
+ *
+ * @returns {Array<{level:number, paths:Array, allPaths:Array, stats:object}>}
+ */
+export function extractMultiIsolines(field, levels, opts = {}) {
+  const minPolylineLength = opts.minPolylineLength ?? 40;
+  const minRingExtent = opts.minRingExtent ?? 21;
+
+  const { cols, rows, step, x0, y0, data } = field;
+  const vx0 = x0 + (field.pad ?? 0);
+  const vy0 = y0 + (field.pad ?? 0);
+  const toViewX = (wx) => wx - vx0;
+  const toViewY = (wy) => wy - vy0;
+
+  const sorted = [...levels].sort((a, b) => a - b);
+  const ctx = sorted.map((level) => {
+    const graph = makeGraph();
+    return { level, graph, edgePoint: makeEdgePoint(graph, level, toViewX, toViewY, x0, y0, step) };
+  });
+
+  // 单元区间 [min,max) 对应 sorted 里的下标范围：min <= L < max
+  const lowerBound = (v) => {
+    let lo = 0;
+    let hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] >= v) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo;
+  };
+
+  for (let j = 0; j < rows - 1; j++) {
+    const r0 = j * cols;
+    const r1 = r0 + cols;
+    for (let i = 0; i < cols - 1; i++) {
+      const v0 = data[r0 + i];
+      const v1 = data[r0 + i + 1];
+      const v2 = data[r1 + i + 1];
+      const v3 = data[r1 + i];
+
+      const mn = Math.min(v0, v1, v2, v3);
+      const mx = Math.max(v0, v1, v2, v3);
+      const from = lowerBound(mn);
+      if (from >= ctx.length) continue;
+      const to = lowerBound(mx); // 不含：层级必须 < max
+      if (from >= to) continue;
+
+      const hTop = (j * cols + i) * 2 + H_EDGE;
+      const hBot = ((j + 1) * cols + i) * 2 + H_EDGE;
+      const vLeft = (j * cols + i) * 2 + V_EDGE;
+      const vRight = (j * cols + i + 1) * 2 + V_EDGE;
+
+      for (let c = from; c < to; c++) {
+        const level = sorted[c];
+        const code = cellCode(v0, v1, v2, v3, level);
+        const pairs = cellPairs(code, v0, v1, v2, v3, level);
+        if (!pairs) continue;
+
+        const { graph, edgePoint } = ctx[c];
+        const E = {
+          T: () => edgePoint(hTop, i, j, v0, i + 1, j, v1),
+          R: () => edgePoint(vRight, i + 1, j, v1, i + 1, j + 1, v2),
+          B: () => edgePoint(hBot, i, j + 1, v3, i + 1, j + 1, v2),
+          L: () => edgePoint(vLeft, i, j, v0, i, j + 1, v3),
+        };
+        for (let k = 0; k < pairs.length; k++) graph.link(E[pairs[k][0]](), E[pairs[k][1]]());
+      }
+    }
+  }
+
+  return ctx.map(({ level, graph }) => {
+    const allPaths = materialize(graph, graph.chains());
+    const stats = applyFilters(allPaths, { minPolylineLength, minRingExtent });
+    stats.level = level;
+    stats.segments = graph.segmentCount();
+    return { level, paths: allPaths.filter((p) => !p.drop), allPaths, stats };
+  });
 }
 
 /**

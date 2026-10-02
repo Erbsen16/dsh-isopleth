@@ -98,8 +98,9 @@ for (const { w, h } of sizes) {
     : null;
 
   // 1:1 原生像素裁切：预览被缩放过就判断不了“细淡”，这块按像素看。
+  // 裁的是 9 层调试图，只有 --sheet 1 时才存在，所以必须跟着 SHEET 一起判断。
   let crop = null;
-  if (PREVIEW && w === 1440) {
+  if (PREVIEW && SHEET && w === 1440) {
     const CROP = { x: 180, y: 280, w: 720, h: 460 };
     const src = decodePng(readFileSync(join(dir, `sheet9-${w}x${h}.png`)));
     const buf = Buffer.alloc(CROP.w * CROP.h * 3);

@@ -1,41 +1,52 @@
 {
-  "name": "dsh-isopleth",
-  "version": "0.4.0",
-  "private": true,
-  "type": "module",
-  "description": "舆图 / Isopleth — 程序化地形底纹生成器：自写值噪声 fBm 高度场 + marching squares 等值线 + 分级色带 + 单向光照 + 水面。零第三方依赖，输出 SVG，可当库或客户端插件用。",
+  "name": "hypsa-isopleth",
+  "version": "0.6.0",
+  "description": "舆图 / 零依赖程序化地形底纹生成器：自写值噪声 fBm 高度场 + marching squares 等高线（isopleth）+ 分层设色色带（hypsometric）+ 单向光照与水面。输出 SVG，可当库或命令行用。",
   "keywords": [
-    "procedural-generation",
-    "terrain",
-    "marching-squares",
-    "fbm",
-    "hillshade",
+    "isopleth",
+    "hypsometric",
     "contour",
+    "contour-lines",
+    "terrain",
+    "procedural-generation",
+    "fbm",
+    "marching-squares",
+    "hillshade",
     "svg",
-    "isopleth"
+    "texture",
+    "background"
   ],
   "license": "MIT",
+  "type": "module",
   "main": "src/index.mjs",
+  "bin": {
+    "hypsa-isopleth": "bin/hypsa-isopleth.mjs"
+  },
   "exports": {
     ".": "./src/index.mjs",
     "./node": "./src/node.mjs",
     "./browser": "./src/browser.mjs",
-    "./plugin": "./dist/dsh-isopleth.plugin.js"
+    "./style": "./src/style.mjs"
   },
   "files": [
     "src",
-    "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
+    "test": "node --test",
     "step1": "node steps/step1.mjs",
     "step2": "node steps/step2.mjs",
     "step3": "node steps/step3.mjs",
     "step4": "node steps/step4.mjs",
-    "build:plugin": "node tools/build-plugin.mjs",
-    "verify:plugin": "node tools/verify-plugin.mjs",
+    "step5": "node steps/step5-style.mjs",
+    "bench": "node tools/bench.mjs 1600 1000 9 7 5 1",
     "verify:lines": "node tools/verify-lines.mjs",
-    "bench": "node tools/bench.mjs 1600 1000 9 7 5 1"
+    "verify:demo": "node tools/verify-demo.mjs",
+    "serve:demo": "node tools/serve-demo.mjs"
   }
 }

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 测试（Node ${{ matrix.node }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 零依赖：不需要 npm install
+      - name: 单元测试 + 几何快照回归
+        run: npm test
+
+      - name: CLI 冒烟（三种风格各出一条）
+        run: |
+          node bin/hypsa-isopleth.mjs --size 800x600 --out /tmp/spec.svg
+          node bin/hypsa-isopleth.mjs --style survey --size 800x600 --out /tmp/survey.svg
+          node bin/hypsa-isopleth.mjs --style none --bands 0 --size 800x600 --out /tmp/plain.svg
+          for f in /tmp/spec.svg /tmp/survey.svg /tmp/plain.svg; do
+            test -s "$f"
+            head -c 5 "$f" | grep -q '<svg'
+          done
+
+      - name: 分层方案出图（49 层，验证性能优化没退化）
+        run: node steps/step6-atlas.mjs --size 1440x1000 --preview 0
+
+      - name: 三尺寸铺满 + 确定性
+        run: |
+          node bin/hypsa-isopleth.mjs --size 1440x1000 --out /tmp/a.svg
+          node bin/hypsa-isopleth.mjs --size 1440x1000 --out /tmp/b.svg
+          cmp /tmp/a.svg /tmp/b.svg   # 同参数必须逐字节一致
+          node bin/hypsa-isopleth.mjs --size 2560x1440 --out /tmp/c.svg
+          node bin/hypsa-isopleth.mjs --size 390x844 --out /tmp/d.svg
+          for f in /tmp/a.svg /tmp/c.svg /tmp/d.svg; do grep -q 'id="ground"' "$f"; done

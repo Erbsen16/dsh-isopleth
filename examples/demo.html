@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>hypsa-isopleth · demo</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #14171a; }
+  body { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #9aa5a0; }
+  #stage { position: fixed; inset: 0; }
+  #hud {
+    position: fixed; left: 20px; bottom: 20px; padding: 12px 16px;
+    border: 1px solid rgba(154,165,160,.22); background: rgba(18,20,22,.86);
+  }
+  #hud b { color: #dfe6e2; font-weight: 600; }
+  #hud select, #hud button {
+    font: inherit; background: transparent; color: inherit;
+    border: 1px solid rgba(154,165,160,.35); padding: 3px 8px; cursor: pointer;
+  }
+  #hud button:hover, #hud select:hover { border-color: rgba(154,165,160,.7); }
+  #hud .row { margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div id="hud">
+    <div>seed <b id="v-seed">—</b> · <b id="v-size">—</b> · 风格 <b id="v-style">—</b></div>
+    <div>生成 <b id="v-ms">—</b> ms · <b id="v-kb">—</b> KB</div>
+    <div class="row">
+      <select id="seed">
+        <option>isopleth-01</option>
+        <option>ridge-07</option>
+        <option>basin-23</option>
+        <option>delta-42</option>
+      </select>
+      <select id="style"></select>
+      <button id="go">重新生成</button>
+    </div>
+  </div>
+
+  <script type="module">
+    // 直接用库 API —— 没有任何插件外壳/打包产物，浏览器原生 ESM 即可
+    import {
+      buildTerrain, renderSvg, styleTerrain, encodePngBrowser,
+      levelsFor, STYLE_PRESETS,
+    } from '../src/index.mjs';
+
+    const body = document.body;
+    const $ = (id) => document.getElementById(id);
+    const stage = $('stage');
+
+    const styleNames = [...Object.keys(STYLE_PRESETS), 'none'];
+    $('style').innerHTML = styleNames.map((n) => `<option>${n}</option>`).join('');
+    $('style').value = 'survey';
+
+    async function render(seed, style, width, height) {
+      const t0 = performance.now();
+      const levels = levelsFor(9);
+      const base = buildTerrain({
+        width, height, seed, levels,
+        bands: { bandCount: 5, contourLevels: levels },
+        lighting: { normalize: true },   // 强度留给风格层
+      });
+      const terrain = style === 'none' ? base : styleTerrain(base, style);
+      const svg = await renderSvg(terrain, { encodePng: encodePngBrowser });
+      return { svg, ms: Math.round(performance.now() - t0) };
+    }
+
+    async function apply() {
+      const seed = $('seed').value;
+      const style = $('style').value;
+      const width = Math.max(320, window.innerWidth);
+      const height = Math.max(320, window.innerHeight);
+      try {
+        const { svg, ms } = await render(seed, style, width, height);
+        const url = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+        stage.style.backgroundImage = url;
+        stage.style.backgroundSize = 'cover';
+        stage.style.backgroundPosition = 'center';
+
+        $('v-seed').textContent = seed;
+        $('v-size').textContent = `${width}×${height}`;
+        $('v-style').textContent = style;
+        $('v-ms').textContent = ms;
+        $('v-kb').textContent = Math.round(svg.length / 1024);
+
+        body.dataset.ready = '1';
+        body.dataset.seed = seed;
+        body.dataset.style = style;
+        body.dataset.ms = String(ms);
+        body.dataset.bytes = String(svg.length);
+        body.dataset.backgroundSet = stage.style.backgroundImage.startsWith('url("data:image/svg+xml') ? '1' : '0';
+      } catch (error) {
+        body.dataset.ready = '0';
+        body.dataset.error = String((error && error.message) || error);
+      }
+    }
+
+    $('go').addEventListener('click', apply);
+    $('seed').addEventListener('change', apply);
+    $('style').addEventListener('change', apply);
+    await apply();
+  </script>
+</body>
+</html>

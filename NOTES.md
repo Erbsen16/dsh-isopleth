@@ -1,20 +1,21 @@
-# 舆图 / dsh-isopleth — 工程笔记
+# 舆图 / hypsa-isopleth — 工程笔记
 
-程序化地形底纹生成器。**Step 1~4 全部完成：高度场 / 等值线 / 分级色带 / 单向光照 / 水面。**
+程序化地形底纹生成器，零依赖。**Step 1~6 全部完成**：高度场 / 等值线 / 分层设色 / 单向光照 / 水面 / 风格层 / 分层参数方案。
 
-命名取自需求文档的三选一之 2：中文「舆图」/ 英文包名 `dsh-isopleth`。Isopleth 是制图学里等值线的正规术语，
-不含任何游戏商标（终末地 / Endfield / 明日方舟 均未出现在模块名、类名、包名、data 属性里）。
+命名取自两个制图学术语：**hypsometric**（分层设色 → 色带）+ **isopleth**（等值线 → 等高线）。
+曾用名 `dsh-isopleth`，去掉 `dsh-` 前缀是因为那是 harness 的名字，与项目通用性无关，且会与其它项目撞名。
 
 ## 形态与输出
 
 | 项 | 取值 |
 |---|---|
-| 形态 | 独立 Node ESM 脚本（`npm run step1` / `step2` / `step3`），无框架、无构建 |
-| 输出 | 一个 **SVG 字符串**（交付物）；PNG 预览由本机 Edge 无头模式光栅化（1x / 2x） |
-| 输入 | `seed`、`width`、`height`、`levels`、`bands`、`lightenStep`、`lighting`、色彩令牌、fBm 参数；全部有默认值 |
-| 依赖 | 仅 Node 标准库（`node:zlib` / `node:fs` / `node:child_process`）。噪声、marching squares、Douglas-Peucker、Catmull-Rom、hillshade、PNG 编解码全部自写 |
-| 动效 | 无任何动画；`prefers-reduced-motion` 天然满足。若将来加动效，需按该媒体查询关掉 |
-| 缓存 | 纯函数：同 (seed, width, height, 参数) 必得同一 SVG。常驻插件只需初始化算一次并缓存，不含任何每帧逻辑 |
+| 形态 | 零依赖 ESM 库 + CLI（`node bin/hypsa-isopleth.mjs`）+ 分阶段脚本（`steps/step1~6`） |
+| 输出 | **SVG 字符串**；PNG 预览由本机 Edge/Chrome 无头光栅化（1x / 2x） |
+| 输入 | `seed`、`width`、`height`、`levels`、`bands`、`lighting`、`water`、风格预设、fBm 参数；全部有默认值 |
+| 依赖 | 仅标准库。噪声、marching squares、Douglas-Peucker、Catmull-Rom、山体阴影、PNG 编解码全部自写 |
+| 动效 | 无动画；`prefers-reduced-motion` 天然满足 |
+| 缓存 | 纯函数：同参数必得逐字节相同的 SVG，常驻宿主只需算一次并缓存，不含每帧逻辑 |
+| 跨平台 | 生成核心零宿主 API；PNG 编码器由调用方注入（Node `zlib` / 浏览器 `CompressionStream`） |
 
 ## 第 2 节量化表落地情况
 
@@ -139,7 +140,7 @@
 预算 300ms，1600×1000 余量约 2.2×。铺满：ground 矩形覆盖整个 viewBox，色带 / 光照 / 水面依次叠在其上，
 三尺寸实际覆盖 == 视口（1440×1000 / 2560×1440 / 390×844）。
 
-## 插件化重构（v0.4）
+## 平台无关重构（v0.4）
 
 原始链路里 `node:zlib` 是硬依赖（光照位图要编码成 PNG 内嵌），浏览器里跑不了。拆法：
 
@@ -147,13 +148,13 @@
 src/generate.mjs   buildTerrain(config) + renderSvg(terrain, { encodePng })   ← 零宿主 API
 src/png.mjs        平台无关 PNG 组装，deflate 由调用方注入（返回 Promise 时本函数也异步）
 src/node.mjs       注入 zlib.deflateSync -> 同步 SVG（CLI / 库）
-src/browser.mjs    注入 CompressionStream('deflate') -> Promise<SVG>（插件 / 页面）
-plugin/entry.mjs   插件本身：缓存、reduced-motion、错误不外抛
-tools/build-plugin.mjs  迷你打包器 -> dist/dsh-isopleth.plugin.js（单文件、无 import）
+src/browser.mjs    注入 CompressionStream('deflate') -> Promise<SVG>（页面 / 任意宿主）
 ```
 
-打包器只支持本项目用到的语法子集，**遇到不认识的写法直接报错退出**，并且有两道守卫：
-顶层标识符冲突检查、产物 Node-only 全局扫描（`process.` / `Buffer` / `require(` / `node:`）。
+**关于「做成插件」的结论**：插件形态没必要，库就够了。当时确实做过一版单文件插件
+（手写打包器 → `dist/*.plugin.js`），后来判断它买到的东西（缓存一次、不每帧重算、尊重 reduced-motion）
+用普通库调用都能拿到，而代价是一个要手工保持同步的构建产物。已删除，改为
+`examples/demo.html` 直接用原生 ESM `import '../src/index.mjs'`，配 `tools/serve-demo.mjs` 起本地静态服务器。
 
 ### 这次回归检查抓到的两个 bug
 
@@ -161,16 +162,15 @@ tools/build-plugin.mjs  迷你打包器 -> dist/dsh-isopleth.plugin.js（单文�
    每个分块尾部多 4 字节 → IHDR/IDAT/IEND 全部错位。是**字节级哈希回归**发现的（体积只差 12 字节，
    肉眼和尺寸都看不出来）。修好后 Node 产物与重构前**逐字节一致**。
 2. **`process.hrtime` 漏进浏览器路径**：`generate.mjs` 里的计时函数用了 Node API，
-   真机跑插件时报 `process is not defined`。改成 `performance.now()`，并把 Node-only 扫描加进打包器。
+   真机跑页面时报 `process is not defined`。改成 `performance.now()`，并加了一道产物 Node-only 全局扫描。
 
-### 插件验收（真浏览器，`node tools/verify-plugin.mjs`）
+### 浏览器路径验收（真浏览器，`node tools/verify-demo.mjs`）
 
 | 断言 | 实测 |
 |---|---|
-| 单文件插件可加载、可生成 | ✅ ready=1，无错误 |
-| 生成耗时 | 194 ms（Edge，1440×1000 全套） |
-| SVG 体积 | 153,505 字节（Node 侧 154 KB，差异来自 deflate 实现） |
-| 连续两次 apply 的生成次数 | **1**（第二次命中缓存，未重算） |
+| 原生 ESM 页面可加载、可出图 | ✅ ready=1，无错误 |
+| 生成耗时 | 190 ms 量级（Edge，1440×1000 全套） |
+| SVG 体积 | 与 Node 侧略有差异（deflate 实现不同，几何一致） |
 | background-image 是否挂上 | ✅ |
 
 ## 风格层（v0.5）：结构与皮肤分离
@@ -218,9 +218,68 @@ tools/build-plugin.mjs  迷你打包器 -> dist/dsh-isopleth.plugin.js（单文�
   但需求方明确「在意的是设计风格，不是地形」，因此**保留为默认关闭的可选项**。
 - **115° 细排线**：参考图里大面积铺着，量化表写「仅限顶栏等窄条」，两者冲突，本轮不做。
 
-## 未决问题
+## 分层参数方案（v0.6）：`src/atlas.mjs`
 
-1. 色带白叠加 5%（带上沿）还是 4%（带中值）；3%/4%/5% 对比裁切在 `out/step2-variants`。
+需求方后来给了一份 Figma/PS 口径的**分层参数表**，比之前的量化表细得多，于是新增一层实现：
+
+| 层 | 参数 | 实现要点 |
+|---|---|---|
+| 1 主线 | 1.5px `#4A4A4A` 35%，每 5 条 | 49 层里第 5/10/…/45 条 = 计曲线 |
+| 2 辅线 | 0.75px `#3A3A3A` 20% | 其余 40 条 |
+| 3 属性线 | 暖 `#C4912B` 18% 滤色 / 冷 `#2E5EAA` 15% 叠加 | **逐段分类后切分**，见下 |
+| 4 断裂 | 卡片区降到 3~5%，边缘羽化 | 高斯模糊生成蒙版，需宿主传卡片矩形 |
+| 5 标注 | 0.5px 环 + 实心点 `#D4A833` 50% + 数值标签 | 在计曲线端点/转折处选点，空间分散 |
+| 叠加 | 噪点 2% 柔光 / 扫描线 1px 每 3px 4% / 径向渐变正片叠底 | `feTurbulence` / `<pattern>` / `<radialGradient>` |
+
+### 三处需要说清楚的地方
+
+1. **原参数表的径向渐变自相矛盾**：写的是「中心 `#000` 0% → 透明 60%，正片叠底，让**边缘**隐入黑暗」。
+   按这个 stop 顺序，正片叠底压暗的是**中心**（第一版渲染出来正中间就是一团黑）。
+   按它的**目的**实现了：中心透明、边缘压暗（`from 0.45 → maxOpacity 0.6`）。
+2. **第 3 层第一次做错了**：一开始按高程分档着色（高处暖、低处冷），但高程档覆盖全图，
+   11 条彩色线其实是**撒满全图**的，不是参数表要求的「局部出现、不铺满」。
+   改成**逐段分类**：把每条等高线按顶点的地形属性切开，暖色只给「高且陡」的段、冷色只给低洼段，
+   其余段不上色。坡度阈值取**分位数**而不是绝对值，换 seed / 换尺寸都不用重调。
+   实测从 6 条整线变成 64 段暖 + 16 段冷，才真正是局部斑块。
+3. **混合模式只能用 CSS `mix-blend-mode`**：SVG 原生没有混合模式。浏览器支持良好，
+   但 `rsvg` / `resvg` / 部分图标工具链不认，会退化成普通叠加。
+
+### 密度逼出的性能重写
+
+参数表要求间距「山体 8-12px、平地 25-40px」，而原实现是 71px 中位，需要把层级从 9 提到 49。
+但原代码**每层各扫一遍全网格**，49 层直接爆预算。
+
+改成「扫一遍网格，每个单元只处理落在它取值区间内的层级」（对层级数组做二分找区间）：
+
+| 层数 | 原实现 | 单遍扫描 | 提速 |
+|---|---|---|---|
+| 9 | 74ms | 25ms | 3.0× |
+| 18 | 105ms | 26ms | 4.0× |
+| 36 | 186ms | 41ms | **4.5×** |
+
+并用探针验证**输出与逐层调用逐字节一致**（`tools/probes/probe-multisweep.mjs`）——纯优化，零行为变化。
+最终 49 层几何 118ms，间距中位 13.9px（p10 7.4 / p90 40.9），正好落进参数表要的区间。
+
+## 测试与 CI（v0.6）
+
+`test/` 下 39 个用例，`node --test` 零依赖运行，覆盖：
+
+- **几何快照哈希闸门**：去掉 `data-*` 后哈希必须等于常量，marching squares / 简化 / 平滑的任何非预期改动都会被拦下
+- **多遍扫描与单遍扫描逐字节一致**（这条保证了性能优化是纯优化）
+- **两条 PNG 编码路径（zlib 与 CompressionStream）像素一致**，且分块长度必须刚好铺满文件
+  （曾经因为多分配 4 字节导致错位，这条测试就是那次事故的护栏）
+- 闭合环不带重复端点、色带多边形必闭合且覆盖 ≈ 视口、噪声连续无跳变
+- CLI 的非法输入必须以退出码 2 结束、`--report` 不能污染 stdout
+- 分层方案的层数 / 混合模式 / 蒙版 / defs 齐备
+
+GitHub Actions（`.github/workflows/ci.yml`）在 Node 18 / 20 / 22 上跑测试、CLI 冒烟、
+分层方案出图、三尺寸铺满与确定性（同参数两条产物 `cmp` 必须相同）。
+
+测试当场抓到一个真 bug：`styleTerrain` 的「必须传归一化明暗」守卫从来没生效——
+判断写成了 `terrain.shade.stats.normalized`，而 `buildTerrain` 把 stats 摊平进了 `terrain.shade`，
+这个路径永远 undefined，于是条件恒真、永远不报错。
+
+## 未决问题
 2. 色带变亮后，14% 线条在亮带上的对比度下降约 30%（实测亮带线峰 9 单位、暗带 20 单位），是否接受。
 3. 光照强度：现行最大压暗 10 个单位（≈4% 亮度）；`--shadow` 可调。
 4. `minRingExtent` 按包围盒长边还是周长判定（现按长边）。

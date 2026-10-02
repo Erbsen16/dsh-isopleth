@@ -22,7 +22,7 @@ export function findBrowser() {
 }
 
 export function rasterizeSvg(svgPath, pngPath, width, height, { browser = findBrowser(), dpr = 1 } = {}) {
-  const scratch = join(tmpdir(), 'dsh-isopleth-scratch');
+  const scratch = join(tmpdir(), 'hypsa-isopleth-scratch');
   mkdirSync(scratch, { recursive: true });
   const htmlPath = join(scratch, `${basename(pngPath, '.png')}.html`);
   const svgUrl = pathToFileURL(svgPath).href;
@@ -42,7 +42,7 @@ export function rasterizeSvg(svgPath, pngPath, width, height, { browser = findBr
     '--no-first-run',
     '--no-default-browser-check',
     `--force-device-scale-factor=${dpr}`,
-    `--user-data-dir=${join(tmpdir(), 'dsh-isopleth-browser')}`,
+    `--user-data-dir=${join(tmpdir(), 'hypsa-isopleth-browser')}`,
     `--window-size=${width},${height}`,
     `--screenshot=${pngPath}`,
     pathToFileURL(htmlPath).href,

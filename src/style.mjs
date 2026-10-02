@@ -67,10 +67,8 @@ export function styleTerrain(terrain, style = 'survey') {
 
   for (const l of terrain.layers) {
     if (l.kind === 'shade') {
-      const scale = terrain.shade && terrain.shade.stats && terrain.shade.stats.normalized === false
-        ? null
-        : true;
-      if (!scale) {
+      // buildTerrain 把 stats 摊平进 terrain.shade，所以 normalized 是顶层字段（不是 .stats.normalized）
+      if (!terrain.shade || terrain.shade.normalized !== true) {
         throw new Error('styleTerrain 需要归一化明暗：buildTerrain 时传 lighting:{ normalize: true }');
       }
       layers.push({ ...l, rgba: remapShadeAlpha(l.rgba, preset.shading) });
