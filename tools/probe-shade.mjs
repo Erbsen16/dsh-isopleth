@@ -1,7 +1,8 @@
 // Throwaway probe: hillshade calibration. Prints the distribution of the normalised
 // shading amount so the default is chosen from numbers, not from taste.
 import { buildField } from '../src/field.mjs';
-import { buildHillshade, hillshadeDataUri } from '../src/hillshade.mjs';
+import { buildHillshade } from '../src/hillshade.mjs';
+import { encodePng } from './png.mjs';
 
 const field = buildField({ width: 1440, height: 1000, seed: 'isopleth-01' });
 
@@ -44,10 +45,10 @@ for (const gradientRadiusPx of [15, 30, 60]) {
     const o = { gradientRadiusPx, relief, stride: 2, altitudeDeg: 45, azimuthDeg: 315 };
     const d = distribution(field, o);
     const shade = buildHillshade(field, { ...o, shadowAlpha: 0.16, lightAlpha: 0.08 });
-    const uri = hillshadeDataUri(shade);
+    const png = encodePng(shade.width, shade.height, shade.rgba, 4);
     console.log(JSON.stringify({
       gradientRadiusPx, relief, ...d,
-      pngKB: +(uri.pngBytes / 1024).toFixed(1),
+      pngKB: +(png.length / 1024).toFixed(1),
       shadowPx: shade.stats.shadowPixelPercent, lightPx: shade.stats.lightPixelPercent, flatPx: shade.stats.flatPixelPercent,
     }));
   }

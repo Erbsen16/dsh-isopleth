@@ -6,10 +6,9 @@
 // 平地 illum = sin(高度角)，以此为中性值，两侧分别叠黑（背光）与叠白（迎光）。
 // 只有一束平行光、没有衰减、没有光斑，符合规格。
 //
-// 这一层是位图：SVG 里没有「由高度场求法线」的原生手段，且背景底纹只需低频明暗，
-// 因此按格点分辨率算好、以 <image> 内嵌（smooth 缩放）。图层顺序在色带之上、等高线之下。
-
-import { encodePng } from '../tools/png.mjs';
+// 这一层是位图：SVG 里没有「由高度场求法线」的原生手段，且背景底纹只需低频明暗。
+// 本模块只算 RGBA，不负责编码 —— 交给调用方注入的 PNG 编码器（Node: zlib；浏览器: CompressionStream），
+// 因此这里没有任何宿主 API 依赖。
 
 export const SHADE_DEFAULTS = {
   azimuthDeg: 315,   // 光的来向（罗盘角）：315° = 西北 = 左上
@@ -124,15 +123,5 @@ export function buildHillshade(field, options = {}) {
       maxShadowAlpha: +maxShadow.toFixed(3),
       maxLightAlpha: +maxLight.toFixed(3),
     },
-  };
-}
-
-/** 打包成 data URI，供 <image> 内嵌。 */
-export function hillshadeDataUri(shade) {
-  const png = encodePng(shade.width, shade.height, shade.rgba, 4);
-  return {
-    href: `data:image/png;base64,${png.toString('base64')}`,
-    pngBytes: png.length,
-    base64Bytes: Math.ceil(png.length / 3) * 4,
   };
 }

@@ -139,6 +139,40 @@
 预算 300ms，1600×1000 余量约 2.2×。铺满：ground 矩形覆盖整个 viewBox，色带 / 光照 / 水面依次叠在其上，
 三尺寸实际覆盖 == 视口（1440×1000 / 2560×1440 / 390×844）。
 
+## 插件化重构（v0.4）
+
+原始链路里 `node:zlib` 是硬依赖（光照位图要编码成 PNG 内嵌），浏览器里跑不了。拆法：
+
+```
+src/generate.mjs   buildTerrain(config) + renderSvg(terrain, { encodePng })   ← 零宿主 API
+src/png.mjs        平台无关 PNG 组装，deflate 由调用方注入（返回 Promise 时本函数也异步）
+src/node.mjs       注入 zlib.deflateSync -> 同步 SVG（CLI / 库）
+src/browser.mjs    注入 CompressionStream('deflate') -> Promise<SVG>（插件 / 页面）
+plugin/entry.mjs   插件本身：缓存、reduced-motion、错误不外抛
+tools/build-plugin.mjs  迷你打包器 -> dist/dsh-isopleth.plugin.js（单文件、无 import）
+```
+
+打包器只支持本项目用到的语法子集，**遇到不认识的写法直接报错退出**，并且有两道守卫：
+顶层标识符冲突检查、产物 Node-only 全局扫描（`process.` / `Buffer` / `require(` / `node:`）。
+
+### 这次回归检查抓到的两个 bug
+
+1. **PNG 分块多分配 4 字节**：`chunk()` 里 `new Uint8Array(8 + body.length + 4)` 多了 4 个 0，
+   每个分块尾部多 4 字节 → IHDR/IDAT/IEND 全部错位。是**字节级哈希回归**发现的（体积只差 12 字节，
+   肉眼和尺寸都看不出来）。修好后 Node 产物与重构前**逐字节一致**。
+2. **`process.hrtime` 漏进浏览器路径**：`generate.mjs` 里的计时函数用了 Node API，
+   真机跑插件时报 `process is not defined`。改成 `performance.now()`，并把 Node-only 扫描加进打包器。
+
+### 插件验收（真浏览器，`node tools/verify-plugin.mjs`）
+
+| 断言 | 实测 |
+|---|---|
+| 单文件插件可加载、可生成 | ✅ ready=1，无错误 |
+| 生成耗时 | 194 ms（Edge，1440×1000 全套） |
+| SVG 体积 | 153,505 字节（Node 侧 154 KB，差异来自 deflate 实现） |
+| 连续两次 apply 的生成次数 | **1**（第二次命中缓存，未重算） |
+| background-image 是否挂上 | ✅ |
+
 ## 未决问题
 
 1. 色带白叠加 5%（带上沿）还是 4%（带中值）；3%/4%/5% 对比裁切在 `out/step2-variants`。

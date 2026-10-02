@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dsh-isopleth · plugin demo</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #14171a; }
+  body {
+    font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #8ea79a;
+  }
+  #stage { position: fixed; inset: 0; }
+  #hud {
+    position: fixed; left: 20px; bottom: 20px; margin: 0;
+    padding: 12px 16px; border: 1px solid rgba(142,167,154,.22);
+    background: rgba(20,23,26,.82); letter-spacing: .02em;
+  }
+  #hud b { color: #cfd8de; font-weight: 600; }
+  #hud button {
+    margin-top: 8px; padding: 4px 10px; cursor: pointer;
+    background: transparent; border: 1px solid rgba(142,167,154,.35);
+    color: #8ea79a; font: inherit;
+  }
+  #hud button:hover { border-color: rgba(142,167,154,.7); }
+</style>
+</head>
+<body>
+  <div id="stage" data-isopleth></div>
+
+  <div id="hud">
+    <div>seed <b id="v-seed">—</b> · <span id="v-size">—</span></div>
+    <div>生成 <b id="v-ms">—</b> ms · <span id="v-kb">—</span> KB · 生成次数 <b id="v-gen">—</b></div>
+    <div>第二次 apply：<b id="v-cached">—</b></div>
+    <button id="swap">换 seed 重新生成</button>
+  </div>
+
+  <script src="../dist/dsh-isopleth.plugin.js"></script>
+  <script>
+    (async () => {
+      const body = document.body;
+      const $ = (id) => document.getElementById(id);
+      const stage = $('stage');
+
+      try {
+        if (!window.DSH_ISOPLETH) throw new Error('DSH_ISOPLETH 未加载');
+        body.dataset.pluginVersion = window.DSH_ISOPLETH.PLUGIN_VERSION;
+
+        const plugin = window.DSH_ISOPLETH.createIsoplethPlugin({
+          seed: 'isopleth-01', width: 1440, height: 1000,
+        });
+
+        // 第一次：真的生成
+        const first = await plugin.apply(stage);
+        // 第二次：同一 key，必须命中缓存且不重算
+        const second = await plugin.apply(stage);
+
+        $('v-seed').textContent = 'isopleth-01';
+        $('v-size').textContent = '1440×1000';
+        $('v-ms').textContent = first.ms;
+        $('v-kb').textContent = Math.round(first.bytes / 1024);
+        $('v-gen').textContent = plugin.stats.generations;
+        $('v-cached').textContent = second.cached ? '命中缓存（未重算）' : '未命中';
+
+        body.dataset.ready = '1';
+        body.dataset.ms = first.ms;
+        body.dataset.bytes = first.bytes;
+        body.dataset.applyOk = String(first.ok);
+        body.dataset.applyError = first.error || '';
+        body.dataset.generations = plugin.stats.generations;
+        body.dataset.secondCached = String(second.cached);
+        body.dataset.backgroundSet = stage.style.backgroundImage.startsWith('url("data:image/svg+xml') ? '1' : '0';
+
+        $('swap').addEventListener('click', async () => {
+          const other = window.DSH_ISOPLETH.createIsoplethPlugin({ seed: 'ridge-07', width: 1440, height: 1000 });
+          const r = await other.apply(stage);
+          $('v-seed').textContent = 'ridge-07';
+          $('v-ms').textContent = r.ms;
+          body.dataset.swapped = '1';
+        });
+      } catch (error) {
+        body.dataset.ready = '0';
+        body.dataset.error = String((error && error.message) || error);
+      }
+    })();
+  </script>
+</body>
+</html>

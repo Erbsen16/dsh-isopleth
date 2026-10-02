@@ -4,7 +4,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { generateIsolineSvg } from '../src/generate.mjs';
+import { generateIsolineSvg } from '../src/node.mjs';
 import { TOKENS, STROKE, SPACING_BAND } from '../src/tokens.mjs';
 import { rasterizeSvg } from '../tools/rasterize.mjs';
 import { measureLineAlpha } from '../tools/png-read.mjs';

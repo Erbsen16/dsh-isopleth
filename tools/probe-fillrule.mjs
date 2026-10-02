@@ -1,7 +1,7 @@
 // Throwaway: 同一份水岸路径，用 evenodd 与 nonzero 各填一次，看哪个和高度场掩膜一致。
 import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng } from './png-read.mjs';
-import { generateTerrainSvg } from '../src/generate.mjs';
+import { generateTerrainSvg } from '../src/node.mjs';
 import { levelsFor } from '../src/measure.mjs';
 import { sampleField } from '../src/field.mjs';
 import { TOKENS } from '../src/tokens.mjs';

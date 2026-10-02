@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng } from './png-read.mjs';
 import { encodePng } from './png.mjs';
-import { generateTerrainSvg } from '../src/generate.mjs';
+import { generateTerrainSvg } from '../src/node.mjs';
 import { levelsFor } from '../src/measure.mjs';
 import { sampleField } from '../src/field.mjs';
 import { rasterizeSvg } from './rasterize.mjs';

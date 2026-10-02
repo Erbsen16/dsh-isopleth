@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { generateIsolineSvg } from '../src/generate.mjs';
+import { generateIsolineSvg } from '../src/node.mjs';
 import { levelsFor, medianContourSpacing } from '../src/measure.mjs';
 import { SPACING_BAND } from '../src/tokens.mjs';
 import { encodePng } from '../tools/png.mjs';

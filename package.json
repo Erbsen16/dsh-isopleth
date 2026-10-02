@@ -1,14 +1,41 @@
 {
   "name": "dsh-isopleth",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "舆图 / Isopleth — 程序化地形底纹生成器：自写值噪声 fBm 高度场 + marching squares 等值线 + 分级色带 + 单向光照。零第三方依赖。",
+  "description": "舆图 / Isopleth — 程序化地形底纹生成器：自写值噪声 fBm 高度场 + marching squares 等值线 + 分级色带 + 单向光照 + 水面。零第三方依赖，输出 SVG，可当库或客户端插件用。",
+  "keywords": [
+    "procedural-generation",
+    "terrain",
+    "marching-squares",
+    "fbm",
+    "hillshade",
+    "contour",
+    "svg",
+    "isopleth"
+  ],
+  "license": "MIT",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./node": "./src/node.mjs",
+    "./browser": "./src/browser.mjs",
+    "./plugin": "./dist/dsh-isopleth.plugin.js"
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "step1": "node steps/step1.mjs",
     "step2": "node steps/step2.mjs",
     "step3": "node steps/step3.mjs",
-    "bench": "node tools/bench.mjs 1600 1000 9 7 5 1",
-    "verify": "node tools/verify-lines.mjs"
+    "step4": "node steps/step4.mjs",
+    "build:plugin": "node tools/build-plugin.mjs",
+    "verify:plugin": "node tools/verify-plugin.mjs",
+    "verify:lines": "node tools/verify-lines.mjs",
+    "bench": "node tools/bench.mjs 1600 1000 9 7 5 1"
   }
 }

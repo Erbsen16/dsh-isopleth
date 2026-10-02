@@ -1,5 +1,5 @@
 // Throwaway: inspect the water rings at 390x844 — closed? nested? how much area?
-import { generateTerrainSvg } from '../src/generate.mjs';
+import { generateTerrainSvg } from '../src/node.mjs';
 import { levelsFor } from '../src/measure.mjs';
 import { extractBandPolygons } from '../src/marching.mjs';
 

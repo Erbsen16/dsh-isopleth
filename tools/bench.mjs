@@ -1,6 +1,6 @@
 // Timing benchmark: N levels at the spec target size (default 1600x1000).
 // Run: node tools/bench.mjs [width] [height] [levelCount] [runs] [bandCount] [light 0|1]
-import { generateTerrainSvg } from '../src/generate.mjs';
+import { generateTerrainSvg } from '../src/node.mjs';
 import { levelsFor } from '../src/measure.mjs';
 
 const [w = 1600, h = 1000, levelCount = 9, runs = 3, bandCount = 0, light = 0] = process.argv.slice(2).map(Number);

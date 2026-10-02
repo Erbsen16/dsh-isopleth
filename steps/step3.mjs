@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { generateTerrainSvg } from '../src/generate.mjs';
+import { generateTerrainSvg } from '../src/node.mjs';
 import { BAND_DEFAULTS } from '../src/bands.mjs';
 import { SHADE_DEFAULTS } from '../src/hillshade.mjs';
 import { levelsFor, medianContourSpacing } from '../src/measure.mjs';
