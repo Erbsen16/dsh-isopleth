@@ -1,0 +1,14 @@
+{
+  "name": "dsh-isopleth",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "舆图 / Isopleth — 程序化地形底纹生成器：自写值噪声 fBm 高度场 + marching squares 等值线 + 分级色带 + 单向光照。零第三方依赖。",
+  "scripts": {
+    "step1": "node steps/step1.mjs",
+    "step2": "node steps/step2.mjs",
+    "step3": "node steps/step3.mjs",
+    "bench": "node tools/bench.mjs 1600 1000 9 7 5 1",
+    "verify": "node tools/verify-lines.mjs"
+  }
+}

@@ -1,0 +1,15 @@
+# 生成产物：由 seed 完全复现，不入库
+#   npm run step4  ->  out/step4-<seed>/
+out/
+
+# 依赖
+node_modules/
+
+# 日志
+*.log
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
