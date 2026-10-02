@@ -20,7 +20,9 @@ export const ATLAS_DEFAULTS = {
   intervals: 49,
   elevationStep: 20,
 
-  major: { width: 1.5, color: '#4A4A4A', opacity: 0.35, every: 5 },
+  // 主线 / 辅线的层次：实测峰值亮度 主线 +18、辅线 +5 —— 看起来太"平整"。
+  // 线宽 1.5→2.0、不透明度 35%→50%，把层次拉到约 +26 / +5（≈5 倍差距），形成首曲线/计曲线的真实地图逻辑。
+  major: { width: 2.0, color: '#4A4A4A', opacity: 0.5, every: 5 },
   minor: { width: 0.75, color: '#3A3A3A', opacity: 0.2 },
 
   attribute: {
@@ -34,10 +36,12 @@ export const ATLAS_DEFAULTS = {
   // 第4层：给定 UI 卡片矩形（视口坐标），卡片下方等高线近乎消失并羽化过渡
   fade: null, // { rects:[{x,y,w,h}], to: 0.04, feather: 20, corner: 12 }
 
+  // 高程标注：原来 7px / 40% 实测峰值只有 L83，投影到大屏基本消失。
+  // 提到 8px / 85%，实测峰值约 L150，能在投影上读出"这是个有数值的终端"，同时不改变颜色体系。
   markers: {
-    color: '#D4A833', opacity: 0.5, ringWidth: 0.5, dotRadius: 0.9, ringRadius: 3.2,
+    color: '#D4A833', opacity: 0.85, ringWidth: 0.5, dotRadius: 0.9, ringRadius: 3.2,
     count: 4,          // 每屏标注点数
-    labelSize: 7, labelOpacity: 0.4, elevationStep: 20,
+    labelSize: 8, labelOpacity: 0.85, elevationStep: 20,
   },
 
   overlay: {
@@ -111,12 +115,13 @@ export function buildAtlasLayers(terrain, options = {}) {
     // 第3层 属性线（混合模式）
     { d: warmD.join(''), stroke: o.attribute.warm.color, strokeWidth: o.attribute.width, strokeOpacity: o.attribute.warm.opacity, style: `mix-blend-mode:${o.attribute.warm.blend}`, mask: fadeMask ? 'card-fade' : undefined },
     { d: coolD.join(''), stroke: o.attribute.cool.color, strokeWidth: o.attribute.width, strokeOpacity: o.attribute.cool.opacity, style: `mix-blend-mode:${o.attribute.cool.blend}`, mask: fadeMask ? 'card-fade' : undefined },
-    // 第5层 标注点
-    { raw: marks.markup },
     // 叠加材质：噪点 / 扫描线 / 径向渐变
     { raw: o.overlay.noise ? `<rect width="${width}" height="${height}" fill="url(#atlas-noise)" style="mix-blend-mode:${o.overlay.noise.blend}"/>` : '' },
     { raw: o.overlay.scanlines ? `<rect width="${width}" height="${height}" fill="url(#atlas-scan)" opacity="${o.overlay.scanlines.opacity}"/>` : '' },
     { raw: o.overlay.vignette ? `<rect width="${width}" height="${height}" fill="url(#atlas-vignette)" style="mix-blend-mode:${o.overlay.vignette.blend}"/>` : '' },
+    // 第5层 标注点放在**最后**：它是数据标签，不该被暗角压暗。
+    // （标注点分散在画面边缘，压在暗角下面会实测从 L150 掉到 L125。）
+    { raw: marks.markup },
   ];
 
   const defs = [fadeMask?.defs, noiseDefs(o.overlay.noise), scanDefs(o.overlay.scanlines), vignetteDefs(o.overlay.vignette)]
