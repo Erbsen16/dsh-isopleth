@@ -201,6 +201,10 @@ const FIELD_DEFAULTS = {
   baseWavelength: 560, // px of the first octave (calibrated: see NOTES.md)
   contrast: 1.5,       // linear gain around 0.5 before clamping
   framing: 'auto',     // 'auto' = pick the window with the widest relief; 'origin' = centred
+  // 可选地形塑形（实验）。默认关闭 = 纯 fBm，输出与不带该参数时逐字节一致。
+  //   warp:    域扭曲，让山脊连成脉络而不是各向同性的圆丘
+  //   terrace: 台地化，把平缓起伏压成「平顶 + 陡崖」，等高线自然在崖壁上聚拢
+  shaping: null,
 };
 
 /**
@@ -267,7 +271,47 @@ function samplePoint(p, wx, wy) {
     lacunarity: p.lacunarity,
   });
   let h = 0.5 + (raw - 0.5) * p.contrast;
-  return h < 0 ? 0 : h > 1 ? 1 : h;
+  h = h < 0 ? 0 : h > 1 ? 1 : h;
+  return p.shaping ? applyShaping(h, wx, wy, p.shaping, p.seedInt) : h;
+}
+
+/** 台地化：把 [0,1] 压成 N 级平顶，级间保留一段过渡作为崖壁。 */
+function terrace(h, steps, softness) {
+  const x = h * steps;
+  const i = Math.floor(x);
+  const f = x - i;
+  const s = Math.max(1e-4, softness);
+  let t = (f - (1 - s) / 2) / s;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const eased = t * t * (3 - 2 * t);
+  return (i + eased) / steps;
+}
+
+/**
+ * 塑形：先域扭曲（让山脊连成脉络），再台地化（平顶 + 陡崖）。
+ * softness 越小崖壁越陡；steps 建议与等高线层级数同量级，让线在崖壁上成束。
+ */
+function applyShaping(h, wx, wy, shaping, seedInt) {
+  const { warp, terrace: terr } = { ...shaping };
+  let v = h;
+  if (warp) {
+    const amp = warp.amp ?? 160;
+    const wl = warp.wavelength ?? 1400;
+    const a = Number.isFinite(warp.seedA) ? warp.seedA : 0x51ed270b;
+    const b = Number.isFinite(warp.seedB) ? warp.seedB : 0x1b873593;
+    // 用同一个高度场的邻域做位移，不引入额外噪声源
+    const dx = fbm(wx / wl + 11.3, wy / wl + 3.7, (seedInt ^ a) | 0, { octaves: 3 }) - 0.5;
+    const dy = fbm(wx / wl + 4.1, wy / wl + 19.9, (seedInt ^ b) | 0, { octaves: 3 }) - 0.5;
+    v = fbm((wx + dx * amp * 2) / (warp.baseWavelength ?? 560), (wy + dy * amp * 2) / (warp.baseWavelength ?? 560), seedInt, {
+      octaves: warp.octaves ?? 6,
+      gain: warp.gain ?? 0.42,
+      lacunarity: 2,
+    });
+    v = 0.5 + (v - 0.5) * (warp.contrast ?? 1.5);
+    v = v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+  if (terr) v = terrace(v, terr.steps ?? 9, terr.softness ?? 0.22);
+  return v;
 }
 
 /**
@@ -292,14 +336,19 @@ function buildField(opts) {
   let min = Infinity;
   let max = -Infinity;
 
+  const shaping = p.shaping;
+
   for (let j = 0; j < rows; j++) {
-    const ny = (y0 + j * step) / baseWavelength;
+    const wy = y0 + j * step;
+    const ny = wy / baseWavelength;
     const row = j * cols;
     for (let i = 0; i < cols; i++) {
-      const nx = (x0 + i * step) / baseWavelength;
+      const wx = x0 + i * step;
+      const nx = wx / baseWavelength;
       const raw = fbm(nx, ny, seedInt, { octaves, gain, lacunarity });
       let h = 0.5 + (raw - 0.5) * contrast;
       h = h < 0 ? 0 : h > 1 ? 1 : h;
+      if (shaping) h = applyShaping(h, wx, wy, shaping, seedInt);
       data[row + i] = h;
       if (h < min) min = h;
       if (h > max) max = h;
@@ -873,6 +922,7 @@ const SHADE_DEFAULTS = {
   // 提亮会在圆丘上生成成片亮块（实测观感就是光斑），因此默认为 0，需要时再打开。
   lightAlpha: 0.0,
   stride: 2,         // 采样格上每隔几个点取一个明暗像素（3px × 2 = 6px 一格）
+  normalize: false,  // true = 输出「归一化明暗」：强度写满，留给风格层决定最终强度
 };
 
 /**
@@ -942,7 +992,7 @@ function buildHillshade(field, options = {}) {
       if (illum < neutral) {
         // 背光：把 [0, neutral] 归一化到 [0,1]，再乘最大叠黑量
         const t = (neutral - illum) / spanDown;
-        const a = t * o.shadowAlpha;
+        const a = t * (o.normalize ? 1 : o.shadowAlpha);
         rgba[p] = 0; rgba[p + 1] = 0; rgba[p + 2] = 0;
         rgba[p + 3] = Math.round(a * 255);
         if (a > maxShadow) maxShadow = a;
@@ -950,7 +1000,7 @@ function buildHillshade(field, options = {}) {
       } else {
         // 迎光：把 [neutral, 1] 归一化到 [0,1]
         const t = spanUp > 0 ? (illum - neutral) / spanUp : 0;
-        const a = t * o.lightAlpha;
+        const a = t * (o.normalize ? 1 : o.lightAlpha);
         rgba[p] = 255; rgba[p + 1] = 255; rgba[p + 2] = 255;
         rgba[p + 3] = Math.round(a * 255);
         if (a > maxLight) maxLight = a;
@@ -968,6 +1018,7 @@ function buildHillshade(field, options = {}) {
     stats: {
       gridSize: `${w}x${h}`,
       pixelsPerShadeSample: step * s,
+      normalized: !!o.normalize,
       lightVector: [+lx.toFixed(3), +ly.toFixed(3), +lz.toFixed(3)],
       neutral: +neutral.toFixed(3),
       shadowPixelPercent: +((hist.shadow / total) * 100).toFixed(1),
@@ -1182,6 +1233,7 @@ const GEN_DEFAULTS = {
   bands: null,         // null = 不出色带；true 或 { bandCount, lightenStep, contourLevels }
   lighting: null,      // null = 不出光照；true 或 { azimuthDeg, altitudeDeg, relief, ... }
   water: null,         // null = 不出水面；true 或 { level, color }
+  background: undefined, // 底色；不传 = TOKENS.ground（量化表：或跟随主题的 --th-bg）
   field: {},
 };
 
@@ -1290,6 +1342,7 @@ function buildTerrain(config = {}) {
   return {
     width: c.width,
     height: c.height,
+    background: c.background,
     field,
     layers,
     bands: bandInfo,

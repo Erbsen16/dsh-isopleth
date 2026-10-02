@@ -20,6 +20,7 @@ export const SHADE_DEFAULTS = {
   // 提亮会在圆丘上生成成片亮块（实测观感就是光斑），因此默认为 0，需要时再打开。
   lightAlpha: 0.0,
   stride: 2,         // 采样格上每隔几个点取一个明暗像素（3px × 2 = 6px 一格）
+  normalize: false,  // true = 输出「归一化明暗」：强度写满，留给风格层决定最终强度
 };
 
 /**
@@ -89,7 +90,7 @@ export function buildHillshade(field, options = {}) {
       if (illum < neutral) {
         // 背光：把 [0, neutral] 归一化到 [0,1]，再乘最大叠黑量
         const t = (neutral - illum) / spanDown;
-        const a = t * o.shadowAlpha;
+        const a = t * (o.normalize ? 1 : o.shadowAlpha);
         rgba[p] = 0; rgba[p + 1] = 0; rgba[p + 2] = 0;
         rgba[p + 3] = Math.round(a * 255);
         if (a > maxShadow) maxShadow = a;
@@ -97,7 +98,7 @@ export function buildHillshade(field, options = {}) {
       } else {
         // 迎光：把 [neutral, 1] 归一化到 [0,1]
         const t = spanUp > 0 ? (illum - neutral) / spanUp : 0;
-        const a = t * o.lightAlpha;
+        const a = t * (o.normalize ? 1 : o.lightAlpha);
         rgba[p] = 255; rgba[p + 1] = 255; rgba[p + 2] = 255;
         rgba[p + 3] = Math.round(a * 255);
         if (a > maxLight) maxLight = a;
@@ -115,6 +116,7 @@ export function buildHillshade(field, options = {}) {
     stats: {
       gridSize: `${w}x${h}`,
       pixelsPerShadeSample: step * s,
+      normalized: !!o.normalize,
       lightVector: [+lx.toFixed(3), +ly.toFixed(3), +lz.toFixed(3)],
       neutral: +neutral.toFixed(3),
       shadowPixelPercent: +((hist.shadow / total) * 100).toFixed(1),

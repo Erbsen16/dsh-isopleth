@@ -34,6 +34,7 @@ export const GEN_DEFAULTS = {
   bands: null,         // null = 不出色带；true 或 { bandCount, lightenStep, contourLevels }
   lighting: null,      // null = 不出光照；true 或 { azimuthDeg, altitudeDeg, relief, ... }
   water: null,         // null = 不出水面；true 或 { level, color }
+  background: undefined, // 底色；不传 = TOKENS.ground（量化表：或跟随主题的 --th-bg）
   field: {},
 };
 
@@ -142,6 +143,7 @@ export function buildTerrain(config = {}) {
   return {
     width: c.width,
     height: c.height,
+    background: c.background,
     field,
     layers,
     bands: bandInfo,

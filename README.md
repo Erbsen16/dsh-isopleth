@@ -67,6 +67,32 @@ node tools/verify-plugin.mjs       # 真浏览器里验收：加载 / 生成 / �
 > 浏览器与 Node 产出的 SVG **不是逐字节相同**：`CompressionStream` 与 zlib 的 deflate 实现不同，
 > 内嵌 PNG 的压缩字节因此略有差异（实测 1440×1000：浏览器 150 KB / Node 154 KB）。几何完全一致。
 
+### 4. 风格层：结构与皮肤分开
+
+生成分两段，可以独立替换：
+
+```
+第一段  buildTerrain()   结构 —— 高度场 / 色带几何 / 等高线几何 / 归一化明暗位图
+第二段  styleTerrain()   皮肤 —— 底色 / 线色 / 线宽 / 线不透明度 / 明暗强度
+```
+
+```bash
+node steps/step5-style.mjs --style survey        # 测绘风：中性深底 + 清晰等高线（推荐）
+node steps/step5-style.mjs --style spec          # 严格按第 2 节量化表
+node steps/step5-style.mjs --style survey-water  # 带十字水系的对照版
+```
+
+内置预设（`src/style.mjs`）：
+
+| 预设 | 底色 | 等高线 | 线比底亮 | 水面 |
+|---|---|---|---|---|
+| `spec` | `#14171a` 偏冷 | `#8ea79a` @14% | +16 | `#2b3a3d` |
+| **`survey`** | `#2b2b2b` 中性 | `#6a6a6a` @95% | **+44** | 关 |
+| `survey-water` | `#2b2b2b` | `#6a6a6a` @95% + 水系青蓝 | +45 | `#2f3c44` |
+
+`survey` 的取值是从风格参考图里**只提取地纹语言**反推的（参考图实测：底色 `#313131`、线 `#5e5f5f`、
+线比底亮 +46）。参考图里的白色地图块、青蓝水系、黄色状态高亮都是游戏内容，不属地纹语言，一律没有抄。
+
 ## 输入参数（都有默认值）
 
 | 参数 | 默认 | 说明 |
